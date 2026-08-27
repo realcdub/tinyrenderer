@@ -38,10 +38,8 @@ void line(int ax, int ay, int bx, int by, TGAColor color, TGAImage &framebuffer)
         }
 
         error += 2 * (by - ay);
-        if (error > bx - ax) {
-            y += by > ay ? 1 : -1;
-            error -= 2 * (bx - ax);
-        }
+        y += (by > ay ? 1 : -1) * (error > bx - ax);
+        error -= (2 * (bx - ax)) * (error > bx - ax);
     }
 }
 
