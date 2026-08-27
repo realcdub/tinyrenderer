@@ -1,5 +1,8 @@
 #include <cmath>
 #include "tgaimage.h"
+#include <ctime>
+#include <chrono>
+#include <iostream>
 
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
@@ -7,7 +10,7 @@ constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
 
-void line(int ax, int ay, int bx, int by, TGAColor color, TGAImage &framebuffer) {
+void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color) {
     // x(t) = ax + (bx - ax) * t
     // y(t) = ay + (by - ay) * t
 
@@ -40,6 +43,7 @@ void line(int ax, int ay, int bx, int by, TGAColor color, TGAImage &framebuffer)
         error += 2 * (by - ay);
         y += (by > ay ? 1 : -1) * (error > bx - ax);
         error -= (2 * (bx - ax)) * (error > bx - ax);
+        // y += slope;
     }
 }
 
@@ -48,18 +52,22 @@ int main(int argc, char** argv) {
     constexpr int height = 64;
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
-    int ax =  7, ay =  3;
-    int bx = 12, by = 37;
-    int cx = 62, cy = 53;
+    std::srand(std::time({}));
+    auto start = std::chrono::steady_clock::now();
+    for (int i=0; i<(1<<24); i++) {
+        int ax = rand()%width, ay = rand()%height;
+        int bx = rand()%width, by = rand()%height;
+        line(ax, ay, bx, by, framebuffer, { rand()%255, rand()%255, rand()%255, rand()%255 });
+    }
+    auto end = std::chrono::steady_clock::now();
+    auto elapsedMicroseconds  = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto elapsedMilliseconds  = elapsedMicroseconds / 1000.0;
+    auto elapsedSeconds  = elapsedMilliseconds / 1000.0;
 
-    // framebuffer.set(ax, ay, white);
-    // framebuffer.set(bx, by, white);
-    // framebuffer.set(cx, cy, white);
-
-    line(ax, ay, bx, by, green, framebuffer);
-    line(bx, by, cx, cy, blue, framebuffer);
-    line(ax, ay, cx, cy, red, framebuffer);
-    // line(cx, cy, ax, ay, yellow, framebuffer);
+    std::cout << "Elapsed time:" << std::endl;
+    std::cout << "Microseconds: " << elapsedMicroseconds << std::endl;
+    std::cout << "Milliseconds: " << elapsedMilliseconds << std::endl;
+    std::cout << "Seconds: " << elapsedSeconds << std::endl;
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
