@@ -23,15 +23,19 @@ void line(int ax, int ay, int bx, int by, TGAColor color, TGAImage &framebuffer)
         std::swap(ay, by);
     }
 
+    float y = ay;
+    float slope = (by - ay) / static_cast<float>(bx - ax);
     for (int x = ax; x <= bx; ++x) {
-        float t = (x - ax) / static_cast<float>(bx - ax);
-        int y = std::round(ay + (by - ay) * t);
+        // float t = (x - ax) / static_cast<float>(bx - ax);
+        // int y = std::round(ay + (by - ay) * t);
 
         if (steep) {
-            framebuffer.set(y, x, color);
+            framebuffer.set(std::round(y), x, color);
         } else {
-            framebuffer.set(x, y, color);
+            framebuffer.set(x, std::round(y), color);
         }
+
+       y += slope;
     }
 }
 
@@ -44,14 +48,14 @@ int main(int argc, char** argv) {
     int bx = 12, by = 37;
     int cx = 62, cy = 53;
 
-    framebuffer.set(ax, ay, white);
-    framebuffer.set(bx, by, white);
-    framebuffer.set(cx, cy, white);
+    // framebuffer.set(ax, ay, white);
+    // framebuffer.set(bx, by, white);
+    // framebuffer.set(cx, cy, white);
 
     line(ax, ay, bx, by, green, framebuffer);
     line(bx, by, cx, cy, blue, framebuffer);
     line(ax, ay, cx, cy, red, framebuffer);
-    line(cx, cy, ax, ay, yellow, framebuffer);
+    // line(cx, cy, ax, ay, yellow, framebuffer);
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
