@@ -11,6 +11,11 @@ constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
 
+typedef struct {
+   int x; 
+   int y; 
+} vertex;
+
 void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color) {
     bool steep = std::abs(by - ay) > std::abs(ax - bx);
 
@@ -45,21 +50,16 @@ void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color)
     }
 }
 
-typedef struct {
-   int x; 
-   int y; 
-} vertex;
+void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
+    line(ax, ay, bx, by, framebuffer, color);
+    line(bx, by, cx, cy, framebuffer, color);
+    line(cx, cy, ax, ay, framebuffer, color);
+}
 
-int main(int argc, char** argv) {
-    constexpr int width  = 1000;
-    constexpr int height = 1000;
-
-    TGAImage framebuffer(width, height, TGAImage::RGB);
-
-    std::vector<vertex> all_vertices{};
-
-    std::ifstream obj_file("..\\obj\\diablo3_pose\\diablo3_pose.obj");
+void render_object(std::string file_name, TGAImage &framebuffer) {
+    std::ifstream obj_file(file_name);
     std::string file_line;
+    std::vector<vertex> all_vertices{};
 
     while (std::getline(obj_file, file_line)) {
         if (file_line.size() == 0) continue;
@@ -75,8 +75,8 @@ int main(int argc, char** argv) {
             iss >> x_normalized;
             iss >> y_normalized;
 
-            new_vertex.x = (width / 2) + (width / 2) * x_normalized;
-            new_vertex.y = (height / 2) + (height / 2) * y_normalized;
+            new_vertex.x = (framebuffer.width() / 2) + (framebuffer.width() / 2) * x_normalized;
+            new_vertex.y = (framebuffer.height() / 2) + (framebuffer.height() / 2) * y_normalized;
 
             all_vertices.push_back(new_vertex);
         } else if (identifier == "f") {
@@ -101,6 +101,14 @@ int main(int argc, char** argv) {
             line(second_vertex.x, second_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
         }
     }
+}
+
+int main(int argc, char** argv) {
+    constexpr int width  = 1000;
+    constexpr int height = 1000;
+
+    TGAImage framebuffer(width, height, TGAImage::RGB);
+    render_object("..\\obj\\african_head\\african_head.obj", framebuffer);
 
     // std::srand(std::time({}));
     // auto start = std::chrono::steady_clock::now();
