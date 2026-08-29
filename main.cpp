@@ -16,7 +16,7 @@ typedef struct {
    int y; 
 } vertex;
 
-void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color) {
+static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color) {
     bool steep = std::abs(by - ay) > std::abs(ax - bx);
 
     if (steep) {
@@ -50,13 +50,31 @@ void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color)
     }
 }
 
-void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
-    line(ax, ay, bx, by, framebuffer, color);
-    line(bx, by, cx, cy, framebuffer, color);
-    line(cx, cy, ax, ay, framebuffer, color);
+static void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
+    if (ay > by) { std::swap(ax, bx); std::swap(ay, by); }
+    if (ay > cy) { std::swap(ax, cx); std::swap(ay, cy); }
+    if (by > cy) { std::swap(bx, cx); std::swap(by, cy); }
+
+    for (int y = ay; y < by; ++y) {
+        int x1 = ax + (cx - ax) * (y - ay) / (cy - ay);
+        int x2 = ax + (bx - ax) * (y - ay) / (by - ay);
+
+        line(x1, y, x2, y, framebuffer, color);
+    }
+
+    for (int y = by; y < cy; ++y) {
+        int x1 = bx + (cx - bx) * (y - by) / (cy - by);
+        int x2 = ax + (cx - ax) * (y - ay) / (cy - ay);
+        
+        line(x1, y, x2, y, framebuffer, color);
+    }
+
+    // line(ax, ay, bx, by, framebuffer, color);
+    // line(bx, by, cx, cy, framebuffer, color);
+    // line(cx, cy, ax, ay, framebuffer, color);
 }
 
-void render_object(std::string file_name, TGAImage &framebuffer) {
+static void render_object(std::string file_name, TGAImage &framebuffer) {
     std::ifstream obj_file(file_name);
     std::string file_line;
     std::vector<vertex> all_vertices{};
@@ -104,11 +122,16 @@ void render_object(std::string file_name, TGAImage &framebuffer) {
 }
 
 int main(int argc, char** argv) {
-    constexpr int width  = 1000;
-    constexpr int height = 1000;
+    constexpr int width  = 128;
+    constexpr int height = 128;
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
-    render_object("..\\obj\\african_head\\african_head.obj", framebuffer);
+
+    triangle(  7, 45, 35, 100, 45,  60, framebuffer, red);
+    triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
+    triangle(115, 83, 80,  90, 85, 120, framebuffer, green); 
+
+    // render_object("..\\obj\\african_head\\african_head.obj", framebuffer);
 
     // std::srand(std::time({}));
     // auto start = std::chrono::steady_clock::now();
