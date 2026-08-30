@@ -50,28 +50,30 @@ static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor
     }
 }
 
+double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
+    return 0.5 * ((ax + bx) * (by - ay) + (bx + cx) * (cy - by) + (ax + cx) * (ay - cy));
+}
+
 static void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
-    if (ay > by) { std::swap(ax, bx); std::swap(ay, by); }
-    if (ay > cy) { std::swap(ax, cx); std::swap(ay, cy); }
-    if (by > cy) { std::swap(bx, cx); std::swap(by, cy); }
+    int bounding_box_min_x = std::min(std::min(ax, bx), cx);
+    int bounding_box_min_y = std::min(std::min(ay, by), cy);
+    int bounding_box_max_x = std::max(std::max(ax, bx), cx);
+    int bounding_box_max_y = std::max(std::max(ay, by), cy);
+    double total_area = signed_triangle_area(ax, ay, bx, by, cx, cy);
 
-    for (int y = ay; y < by; ++y) {
-        int x1 = ax + (cx - ax) * (y - ay) / (cy - ay);
-        int x2 = ax + (bx - ax) * (y - ay) / (by - ay);
 
-        line(x1, y, x2, y, framebuffer, color);
+    #pragma omp parallel for
+    for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
+        for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y) {
+            double alpha = signed_triangle_area(x, y, bx, by, cx, cy) / total_area;
+            double beta = signed_triangle_area(x, y, cx, cy, ax, ay) / total_area;
+            double gamma = signed_triangle_area(x, y, ax, ay, bx, by) / total_area;
+
+            if (alpha < 0 || beta < 0 || gamma < 0) continue;
+
+            framebuffer.set(x, y, color);
+        }
     }
-
-    for (int y = by; y < cy; ++y) {
-        int x1 = bx + (cx - bx) * (y - by) / (cy - by);
-        int x2 = ax + (cx - ax) * (y - ay) / (cy - ay);
-        
-        line(x1, y, x2, y, framebuffer, color);
-    }
-
-    // line(ax, ay, bx, by, framebuffer, color);
-    // line(bx, by, cx, cy, framebuffer, color);
-    // line(cx, cy, ax, ay, framebuffer, color);
 }
 
 static void render_object(std::string file_name, TGAImage &framebuffer) {
