@@ -51,7 +51,8 @@ static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor
 }
 
 double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
-    return 0.5 * ((ax + bx) * (by - ay) + (bx + cx) * (cy - by) + (ax + cx) * (ay - cy));
+    // Half the magnitude of the cross product of vectors AB and AC
+    return ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) * 0.5;
 }
 
 static void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
@@ -65,6 +66,11 @@ static void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &f
     #pragma omp parallel for
     for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
         for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y) {
+
+            /*
+             Cross product is not commutative, so the ordering must follow A -> B -> C, 
+             which was defined by the ordering of the total_area calculation
+            */
             double alpha = signed_triangle_area(x, y, bx, by, cx, cy) / total_area;
             double beta = signed_triangle_area(x, y, cx, cy, ax, ay) / total_area;
             double gamma = signed_triangle_area(x, y, ax, ay, bx, by) / total_area;
