@@ -55,18 +55,16 @@ double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
     return ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) * 0.5;
 }
 
-static void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
+static void triangle(int ax, int ay, int bx, int by, int cx, int cy, int az, int bz, int cz, TGAImage &framebuffer, TGAColor color) {
     int bounding_box_min_x = std::min(std::min(ax, bx), cx);
     int bounding_box_min_y = std::min(std::min(ay, by), cy);
     int bounding_box_max_x = std::max(std::max(ax, bx), cx);
     int bounding_box_max_y = std::max(std::max(ay, by), cy);
     double total_area = signed_triangle_area(ax, ay, bx, by, cx, cy);
 
-
     #pragma omp parallel for
     for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
         for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y) {
-
             /*
              Cross product is not commutative, so the ordering must follow A -> B -> C, 
              which was defined by the ordering of the total_area calculation
@@ -77,7 +75,7 @@ static void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &f
 
             if (alpha < 0 || beta < 0 || gamma < 0) continue;
 
-            framebuffer.set(x, y, color);
+            framebuffer.set(x, y, {alpha * az, beta * bz, gamma * cz, 255});
         }
     }
 }
@@ -122,22 +120,29 @@ static void render_object(std::string file_name, TGAImage &framebuffer) {
             vertex second_vertex = all_vertices.at(vertex_indices[1] - 1); 
             vertex third_vertex = all_vertices.at(vertex_indices[2] - 1); 
 
-            line(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, framebuffer, red);
-            line(first_vertex.x, first_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
-            line(second_vertex.x, second_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
+            // line(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, framebuffer, red);
+            // line(first_vertex.x, first_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
+            // line(second_vertex.x, second_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
+            TGAColor random_color;
+            for (int i = 0; i < 3; ++i) {
+                random_color.bgra[i] = std::rand() % 255;
+            }
+
+            triangle(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, third_vertex.x, third_vertex.y, 1, 1, 1, framebuffer, random_color);
         }
     }
 }
 
 int main(int argc, char** argv) {
-    constexpr int width  = 128;
-    constexpr int height = 128;
+    constexpr int width  = 256;
+    constexpr int height = 256;
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
-    triangle(  7, 45, 35, 100, 45,  60, framebuffer, red);
-    triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
-    triangle(115, 83, 80,  90, 85, 120, framebuffer, green); 
+    triangle(7, 45, 35, 100, 45,  60, 255, 255, 255, framebuffer, red);
+    triangle(120, 35, 90, 5, 45, 110, 255, 255, 255, framebuffer, white);
+    triangle(115, 83, 80, 90, 85, 120, 255, 255, 255, framebuffer, green); 
+    // line(115, 83, 80,  90, framebuffer, green); 
 
     // render_object("..\\obj\\african_head\\african_head.obj", framebuffer);
 
