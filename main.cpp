@@ -13,8 +13,9 @@ constexpr TGAColor yellow  = {  0, 200, 255, 255};
 
 typedef struct {
    int x; 
-   int y; 
-} vertex;
+   int y;
+   int z;
+} vec3;
 
 static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color) {
     bool steep = std::abs(by - ay) > std::abs(ax - bx);
@@ -55,7 +56,7 @@ double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
     return ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) * 0.5;
 }
 
-static void triangle(int ax, int ay, int bx, int by, int cx, int cy, int az, int bz, int cz, TGAImage &framebuffer, TGAColor color) {
+static void triangle(int ax, int ay, int az, int bx, int by, int bz, int cx, int cy, int cz, TGAImage &zbuffer, TGAImage &framebuffer, TGAColor color) {
     int bounding_box_min_x = std::min(std::min(ax, bx), cx);
     int bounding_box_min_y = std::min(std::min(ay, by), cy);
     int bounding_box_max_x = std::max(std::max(ax, bx), cx);
@@ -75,15 +76,21 @@ static void triangle(int ax, int ay, int bx, int by, int cx, int cy, int az, int
 
             if (alpha < 0 || beta < 0 || gamma < 0) continue;
 
-            framebuffer.set(x, y, {alpha * az, beta * bz, gamma * cz, 255});
+            // Render triangle "wireframe"
+            // if (alpha > 0.1 && beta > 0.1 && gamma > 0.1) continue;
+
+            uint8_t z = alpha * az + beta * bz + gamma * cz;
+            if (zbuffer.get(x, y).bgra[0] >= z) continue;
+            zbuffer.set(x, y, {z});
+            framebuffer.set(x, y, color);
         }
     }
 }
 
-static void render_object(std::string file_name, TGAImage &framebuffer) {
+static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &framebuffer) {
     std::ifstream obj_file(file_name);
     std::string file_line;
-    std::vector<vertex> all_vertices{};
+    std::vector<vec3> all_vertices{};
 
     while (std::getline(obj_file, file_line)) {
         if (file_line.size() == 0) continue;
@@ -93,14 +100,16 @@ static void render_object(std::string file_name, TGAImage &framebuffer) {
         iss >> identifier;
 
         if (identifier == "v") {
-            vertex new_vertex{};
+            vec3 new_vertex{};
 
-            float x_normalized, y_normalized;
+            float x_normalized, y_normalized, z_normalized;
             iss >> x_normalized;
             iss >> y_normalized;
+            iss >> z_normalized;
 
-            new_vertex.x = (framebuffer.width() / 2) + (framebuffer.width() / 2) * x_normalized;
-            new_vertex.y = (framebuffer.height() / 2) + (framebuffer.height() / 2) * y_normalized;
+            new_vertex.x = (framebuffer.width() / 2.0) + (framebuffer.width() / 2.0) * x_normalized;
+            new_vertex.y = (framebuffer.height() / 2.0) + (framebuffer.height() / 2.0) * y_normalized;
+            new_vertex.z = (255 / 2.0) + (255 / 2.0) * z_normalized;
 
             all_vertices.push_back(new_vertex);
         } else if (identifier == "f") {
@@ -116,9 +125,9 @@ static void render_object(std::string file_name, TGAImage &framebuffer) {
                 }
             }
             
-            vertex first_vertex = all_vertices.at(vertex_indices[0] - 1); 
-            vertex second_vertex = all_vertices.at(vertex_indices[1] - 1); 
-            vertex third_vertex = all_vertices.at(vertex_indices[2] - 1); 
+            vec3 first_vertex = all_vertices.at(vertex_indices[0] - 1); 
+            vec3 second_vertex = all_vertices.at(vertex_indices[1] - 1); 
+            vec3 third_vertex = all_vertices.at(vertex_indices[2] - 1); 
 
             // line(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, framebuffer, red);
             // line(first_vertex.x, first_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
@@ -128,7 +137,7 @@ static void render_object(std::string file_name, TGAImage &framebuffer) {
                 random_color.bgra[i] = std::rand() % 255;
             }
 
-            triangle(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, third_vertex.x, third_vertex.y, 1, 1, 1, framebuffer, random_color);
+            triangle(first_vertex.x, first_vertex.y, first_vertex.z, second_vertex.x, second_vertex.y, second_vertex.z, third_vertex.x, third_vertex.y, third_vertex.z, zbuffer, framebuffer, random_color);
         }
     }
 }
@@ -138,13 +147,15 @@ int main(int argc, char** argv) {
     constexpr int height = 256;
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
+    TGAImage zbuffer(width, height, TGAImage::GRAYSCALE);
 
-    triangle(7, 45, 35, 100, 45,  60, 255, 255, 255, framebuffer, red);
-    triangle(120, 35, 90, 5, 45, 110, 255, 255, 255, framebuffer, white);
-    triangle(115, 83, 80, 90, 85, 120, 255, 255, 255, framebuffer, green); 
+    // triangle(7, 45, 35, 100, 45,  60, 255, 255, 255, framebuffer, red);
+    // triangle(120, 35, 90, 5, 45, 110, 255, 255, 255, framebuffer, white);
+    // triangle(115, 83, 80, 90, 85, 120, 255, 255, 255, framebuffer, green); 
     // line(115, 83, 80,  90, framebuffer, green); 
 
-    // render_object("..\\obj\\african_head\\african_head.obj", framebuffer);
+    render_object("..\\obj\\african_head\\african_head.obj", zbuffer, framebuffer);
+    // render_object("..\\obj\\diablo3_pose\\diablo3_pose.obj", zbuffer, framebuffer);
 
     // std::srand(std::time({}));
     // auto start = std::chrono::steady_clock::now();
@@ -164,5 +175,6 @@ int main(int argc, char** argv) {
     // std::cout << "Seconds: " << elapsedSeconds << std::endl;
 
     framebuffer.write_tga_file("framebuffer.tga");
+    zbuffer.write_tga_file("zbuffer.tga");
     return 0;
 }
