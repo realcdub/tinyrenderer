@@ -1,21 +1,17 @@
 #include <cmath>
-#include "tgaimage.h"
 #include <ctime>
 #include <chrono>
 #include <iostream>
+#include <numbers>
 #include <string>
+#include "tgaimage.h"
+#include "geometry.h"
 
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
-
-typedef struct {
-   int x; 
-   int y;
-   int z;
-} vec3;
 
 static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor color) {
     bool steep = std::abs(by - ay) > std::abs(ax - bx);
@@ -87,6 +83,15 @@ static void triangle(int ax, int ay, int az, int bx, int by, int bz, int cx, int
     }
 }
 
+static vec3 rotate_vector_y(const vec3& vec, float angle)
+{
+    return {
+        vec.x * std::cos(angle) + vec.z * std::sin(angle),
+        vec.y,
+        -vec.x * std::sin(angle) + vec.z * std::cos(angle)
+    };
+}
+
 static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &framebuffer) {
     std::ifstream obj_file(file_name);
     std::string file_line;
@@ -100,16 +105,17 @@ static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &fr
         iss >> identifier;
 
         if (identifier == "v") {
-            vec3 new_vertex{};
-
             float x_normalized, y_normalized, z_normalized;
             iss >> x_normalized;
             iss >> y_normalized;
             iss >> z_normalized;
 
-            new_vertex.x = (framebuffer.width() / 2.0) + (framebuffer.width() / 2.0) * x_normalized;
-            new_vertex.y = (framebuffer.height() / 2.0) + (framebuffer.height() / 2.0) * y_normalized;
-            new_vertex.z = (255 / 2.0) + (255 / 2.0) * z_normalized;
+            vec3 new_vertex{x_normalized, y_normalized, z_normalized};
+            new_vertex = rotate_vector_y(new_vertex, 3.14159265358979 / 6);
+
+            new_vertex.x = (framebuffer.width() / 2.0)  * (new_vertex.x + 1);
+            new_vertex.y = (framebuffer.height() / 2.0) * (new_vertex.y + 1);
+            new_vertex.z = (new_vertex.z + 1) * (255 / 2.0);
 
             all_vertices.push_back(new_vertex);
         } else if (identifier == "f") {
@@ -125,9 +131,9 @@ static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &fr
                 }
             }
             
-            vec3 first_vertex = all_vertices.at(vertex_indices[0] - 1); 
-            vec3 second_vertex = all_vertices.at(vertex_indices[1] - 1); 
-            vec3 third_vertex = all_vertices.at(vertex_indices[2] - 1); 
+            vec3 first_vertex = all_vertices.at(vertex_indices[0] - 1);
+            vec3 second_vertex = all_vertices.at(vertex_indices[1] - 1);
+            vec3 third_vertex = all_vertices.at(vertex_indices[2] - 1);
 
             // line(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, framebuffer, red);
             // line(first_vertex.x, first_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
