@@ -52,7 +52,7 @@ double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
     return ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) * 0.5;
 }
 
-static void triangle(int ax, int ay, int az, int bx, int by, int bz, int cx, int cy, int cz, TGAImage &zbuffer, TGAImage &framebuffer, TGAColor color) {
+static void triangle(int ax, int ay, float az, int bx, int by, float bz, int cx, int cy, float cz, std::vector<float> &zbuffer, TGAImage &framebuffer, TGAColor color) {
     int bounding_box_min_x = std::min(std::min(ax, bx), cx);
     int bounding_box_min_y = std::min(std::min(ay, by), cy);
     int bounding_box_max_x = std::max(std::max(ax, bx), cx);
@@ -75,9 +75,11 @@ static void triangle(int ax, int ay, int az, int bx, int by, int bz, int cx, int
             // Render triangle "wireframe"
             // if (alpha > 0.1 && beta > 0.1 && gamma > 0.1) continue;
 
-            uint8_t z = alpha * az + beta * bz + gamma * cz;
-            if (zbuffer.get(x, y).bgra[0] >= z) continue;
-            zbuffer.set(x, y, {z});
+            float z = alpha * az + beta * bz + gamma * cz;
+            int index{x + y * framebuffer.width()};
+
+            if (zbuffer.at(index) >= z) continue;
+            zbuffer[index] = z;
             framebuffer.set(x, y, color);
         }
     }
@@ -92,13 +94,58 @@ static vec3 rotate_vector_y(const vec3& vec, float angle)
     };
 }
 
-static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &framebuffer) {
+static mat4 central_projection(double c)
+{
+    return {
+        {1, 0, 0, 0},
+        {0, 1, 0, 0},
+        {0, 0, 1, -1 / c},
+        {0, 0, 0, 1}
+    };
+}
+
+static mat4 look_at(const vec3& eye, const vec3& center, const vec3& up)
+{
+    vec3 n{(eye - center).normalized()};
+    vec3 l{up.cross(n).normalized()};
+    vec3 m{n.cross(l).normalized()};
+
+    mat4 ModelView =
+        mat4( {l.x, m.x, n.x, 0}, {l.y, m.y, n.y, 0}, {l.z, m.z, n.z, 0}, {0, 0, 0, 1})
+        * mat4( {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {-eye.x, -eye.y, -eye.z, 1});
+
+    return ModelView;
+}
+
+static mat4 viewport(int width, int height)
+{
+    return {
+        {width / 2.0, 0, 0, 0},
+        {0, height / 2.0, 0, 0},
+        {0, 0, 1, 0},
+        {width / 2.0, height / 2.0, 0, 1}
+    };
+}
+
+static void render_object(std::string file_name, std::vector<float> &zbuffer, TGAImage &framebuffer)
+{
     std::ifstream obj_file(file_name);
     std::string file_line;
     std::vector<vec3> all_vertices{};
 
+    const vec3 eye{-1, 0, 2};
+    const vec3 center{0, 0, 0};
+    const vec3 up{0, 1, 0};
+    const double focus{(eye - center).magnitude()};
+    const int width{framebuffer.width()};
+    const int height{framebuffer.height()};
+
+    mat4 ModelView{look_at(eye, center, up)};
+    mat4 Projection{central_projection(focus)};
+    mat4 Viewport{viewport(width, height)};
+
     while (std::getline(obj_file, file_line)) {
-        if (file_line.size() == 0) continue;
+        if (file_line.empty()) continue;
         std::istringstream iss(file_line);
 
         std::string identifier;
@@ -111,11 +158,11 @@ static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &fr
             iss >> z_normalized;
 
             vec3 new_vertex{x_normalized, y_normalized, z_normalized};
-            new_vertex = rotate_vector_y(new_vertex, 3.14159265358979 / 6);
 
-            new_vertex.x = (framebuffer.width() / 2.0)  * (new_vertex.x + 1);
-            new_vertex.y = (framebuffer.height() / 2.0) * (new_vertex.y + 1);
-            new_vertex.z = (new_vertex.z + 1) * (255 / 2.0);
+            vec4 transformed_vertex{Projection * ModelView * vec4(new_vertex.x, new_vertex.y, new_vertex.z, 1)};
+            vec4 ndc{transformed_vertex.x / transformed_vertex.w, transformed_vertex.y / transformed_vertex.w, transformed_vertex.z / transformed_vertex.w, 1};
+            vec4 screen{Viewport * ndc};
+            new_vertex = vec3(screen.x, screen.y, screen.z);
 
             all_vertices.push_back(new_vertex);
         } else if (identifier == "f") {
@@ -149,11 +196,11 @@ static void render_object(std::string file_name, TGAImage &zbuffer, TGAImage &fr
 }
 
 int main(int argc, char** argv) {
-    constexpr int width  = 256;
-    constexpr int height = 256;
+    constexpr int width  = 800;
+    constexpr int height = 800;
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
-    TGAImage zbuffer(width, height, TGAImage::GRAYSCALE);
+    std::vector<float> zbuffer(width * height, -1000);
 
     // triangle(7, 45, 35, 100, 45,  60, 255, 255, 255, framebuffer, red);
     // triangle(120, 35, 90, 5, 45, 110, 255, 255, 255, framebuffer, white);
@@ -162,6 +209,7 @@ int main(int argc, char** argv) {
 
     render_object("..\\obj\\african_head\\african_head.obj", zbuffer, framebuffer);
     // render_object("..\\obj\\diablo3_pose\\diablo3_pose.obj", zbuffer, framebuffer);
+    // render_object("..\\obj\\antidote\\ArmorHelm.obj", zbuffer, framebuffer);
 
     // std::srand(std::time({}));
     // auto start = std::chrono::steady_clock::now();
@@ -181,6 +229,5 @@ int main(int argc, char** argv) {
     // std::cout << "Seconds: " << elapsedSeconds << std::endl;
 
     framebuffer.write_tga_file("framebuffer.tga");
-    zbuffer.write_tga_file("zbuffer.tga");
     return 0;
 }
