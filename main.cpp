@@ -28,12 +28,8 @@ static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor
 
     int y = ay;
     int error = 0;
-    // float y = ay;
-    // float slope = (by - ay) / static_cast<float>(bx - ax);
-    for (int x = ax; x <= bx; ++x) {
-        // float t = (x - ax) / static_cast<float>(bx - ax);
-        // int y = std::round(ay + (by - ay) * t);
 
+    for (int x = ax; x <= bx; ++x) {
         if (steep) {
             framebuffer.set(y, x, color);
         } else {
@@ -43,7 +39,6 @@ static void line(int ax, int ay, int bx, int by, TGAImage &framebuffer, TGAColor
         error += 2 * std::abs(by - ay);
         y += (by > ay ? 1 : -1) * (error > bx - ax);
         error -= (2 * (bx - ax)) * (error > bx - ax);
-        // y += slope;
     }
 }
 
