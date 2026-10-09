@@ -1,0 +1,1 @@
+I am learning from TinyRenderer by Dimitry Sokolov to learn how three-dimensional objects are drawn on a screen. Currently, I have implemented triangle rasterization, a camera, a zbuffer, and perspective projection.
