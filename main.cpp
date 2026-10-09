@@ -4,8 +4,10 @@
 #include <iostream>
 #include <numbers>
 #include <string>
+
 #include "tgaimage.h"
 #include "geometry.h"
+#include "Object.h"
 
 constexpr TGAColor white   = {255, 255, 255, 255};
 constexpr TGAColor green   = {  0, 255,   0, 255};
@@ -47,12 +49,16 @@ double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
     return ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) * 0.5;
 }
 
-static void triangle(int ax, int ay, float az, int bx, int by, float bz, int cx, int cy, float cz, std::vector<float> &zbuffer, TGAImage &framebuffer, TGAColor color) {
-    int bounding_box_min_x = std::min(std::min(ax, bx), cx);
-    int bounding_box_min_y = std::min(std::min(ay, by), cy);
-    int bounding_box_max_x = std::max(std::max(ax, bx), cx);
-    int bounding_box_max_y = std::max(std::max(ay, by), cy);
-    double total_area = signed_triangle_area(ax, ay, bx, by, cx, cy);
+static void triangle(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TGAImage &framebuffer, TGAColor color) {
+    vec4 a{screenCoordinates[0]};
+    vec4 b{screenCoordinates[1]};
+    vec4 c{screenCoordinates[2]};
+
+    int bounding_box_min_x = std::min(std::min(a.x, b.x), c.x);
+    int bounding_box_min_y = std::min(std::min(a.y, b.y), c.y);
+    int bounding_box_max_x = std::max(std::max(a.x, b.x), c.x);
+    int bounding_box_max_y = std::max(std::max(a.y, b.y), c.y);
+    double total_area = signed_triangle_area(a.x, a.y, b.x, b.y, c.x, c.y);
 
     #pragma omp parallel for
     for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
@@ -61,16 +67,16 @@ static void triangle(int ax, int ay, float az, int bx, int by, float bz, int cx,
              Cross product is not commutative, so the ordering must follow A -> B -> C, 
              which was defined by the ordering of the total_area calculation
             */
-            double alpha = signed_triangle_area(x, y, bx, by, cx, cy) / total_area;
-            double beta = signed_triangle_area(x, y, cx, cy, ax, ay) / total_area;
-            double gamma = signed_triangle_area(x, y, ax, ay, bx, by) / total_area;
+            double alpha = signed_triangle_area(x, y, b.x, b.y, c.x, c.y) / total_area;
+            double beta = signed_triangle_area(x, y, c.x, c.y, a.x, a.y) / total_area;
+            double gamma = signed_triangle_area(x, y, a.x, a.y, b.x, b.y) / total_area;
 
             if (alpha < 0 || beta < 0 || gamma < 0) continue;
             int index{x + y * framebuffer.width()};
 
             if (index < 0 || index > zbuffer.size() - 1) continue;
 
-            float z = alpha * az + beta * bz + gamma * cz;
+            float z = alpha * a.z + beta * b.z + gamma * c.z;
             if (zbuffer.at(index) >= z) continue;
 
             zbuffer[index] = z;
@@ -121,15 +127,12 @@ static mat4 viewport(int width, int height)
     };
 }
 
-static void render_object(std::string file_name, std::vector<float> &zbuffer, TGAImage &framebuffer)
+static void render_object(Object& object, std::vector<float> &zbuffer, TGAImage &framebuffer)
 {
-    std::ifstream obj_file(file_name);
-    std::string file_line;
-    std::vector<vec3> all_vertices{};
-
-    const vec3 eye{0.35, 0, 0.6};
+    const vec3 eye{0, 0, 0.6};
     const vec3 center{0, 0, 0};
     const vec3 up{0, 1, 0};
+
     const double focus{(eye - center).magnitude()};
     const int width{framebuffer.width()};
     const int height{framebuffer.height()};
@@ -138,52 +141,25 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
     mat4 Projection{central_projection(focus)};
     mat4 Viewport{viewport(width, height)};
 
-    while (std::getline(obj_file, file_line)) {
-        if (file_line.empty()) continue;
-        std::istringstream iss(file_line);
+    for (int face = 0; face < object.GetNumberOfFaces(); ++face)
+    {
 
-        std::string identifier;
-        iss >> identifier;
-
-        if (identifier == "v") {
-            float x_normalized, y_normalized, z_normalized;
-            iss >> x_normalized;
-            iss >> y_normalized;
-            iss >> z_normalized;
-
-            vec3 new_vertex{x_normalized, y_normalized, z_normalized};
-
-            vec4 transformed_vertex{Projection * ModelView * vec4(new_vertex.x, new_vertex.y, new_vertex.z, 1)};
-            vec4 ndc{transformed_vertex.x / transformed_vertex.w, transformed_vertex.y / transformed_vertex.w, transformed_vertex.z / transformed_vertex.w, 1};
-
-            vec4 screen{Viewport * ndc};
-            new_vertex = vec3(screen.x, screen.y, screen.z);
-
-            all_vertices.push_back(new_vertex);
-        } else if (identifier == "f") {
-            std::string face[3];
-            int vertex_indices[3] = {};
-
-            iss >> face[0] >> face[1] >> face[2];
-
-            for (int i = 0; i < 3; ++i) {
-                std::size_t found_slash_index = face[i].find("/");
-                if (found_slash_index != std::string::npos) {
-                    vertex_indices[i] = std::stoi(face[i].substr(0, found_slash_index));
-                }
-            }
-            
-            vec3 first_vertex = all_vertices.at(vertex_indices[0] - 1);
-            vec3 second_vertex = all_vertices.at(vertex_indices[1] - 1);
-            vec3 third_vertex = all_vertices.at(vertex_indices[2] - 1);
-
-            TGAColor random_color;
-            for (int i = 0; i < 3; ++i) {
-                random_color.bgra[i] = std::rand() % 255;
-            }
-
-            triangle(first_vertex.x, first_vertex.y, first_vertex.z, second_vertex.x, second_vertex.y, second_vertex.z, third_vertex.x, third_vertex.y, third_vertex.z, zbuffer, framebuffer, random_color);
+        vec4 ndc[3];
+        for (int vertexIndex = 0; vertexIndex < 3; ++vertexIndex)
+        {
+            vec3 currentVertex{object.GetVertex(face, vertexIndex)};
+            vec4 transformedVertex{Projection * ModelView * vec4(currentVertex.x, currentVertex.y, currentVertex.z, 1)};
+            ndc[vertexIndex] = {transformedVertex.x / transformedVertex.w, transformedVertex.y / transformedVertex.w, transformedVertex.z / transformedVertex.w, 1};
         }
+
+        vec4 screenCoordinates[3] = {Viewport * ndc[0], Viewport * ndc[1], Viewport * ndc[2]};
+
+        TGAColor random_color;
+        for (int i = 0; i < 3; ++i) {
+            random_color.bgra[i] = std::rand() % 255;
+        }
+
+        triangle(screenCoordinates, zbuffer, framebuffer, random_color);
     }
 }
 
@@ -194,7 +170,8 @@ int main(int argc, char** argv) {
     TGAImage framebuffer(width, height, TGAImage::RGB);
     std::vector<float> zbuffer(width * height, -1000);
 
-    render_object("..\\obj\\african_head\\african_head.obj", zbuffer, framebuffer);
+    Object object{"..\\obj\\african_head\\african_head.obj"};
+    render_object(object, zbuffer, framebuffer);
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;

@@ -52,7 +52,10 @@ endif()
 find_package(OpenMP REQUIRED)
 
 set(SOURCES main.cpp tgaimage.cpp
-        geometry.h)
+        geometry.h
+        Object.cpp
+        Object.h
+)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
