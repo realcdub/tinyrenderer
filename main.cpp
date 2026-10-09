@@ -7,7 +7,7 @@
 #include "tgaimage.h"
 #include "geometry.h"
 
-constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
+constexpr TGAColor white   = {255, 255, 255, 255};
 constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
@@ -71,14 +71,13 @@ static void triangle(int ax, int ay, float az, int bx, int by, float bz, int cx,
             double gamma = signed_triangle_area(x, y, ax, ay, bx, by) / total_area;
 
             if (alpha < 0 || beta < 0 || gamma < 0) continue;
-
-            // Render triangle "wireframe"
-            // if (alpha > 0.1 && beta > 0.1 && gamma > 0.1) continue;
-
-            float z = alpha * az + beta * bz + gamma * cz;
             int index{x + y * framebuffer.width()};
 
+            if (index < 0 || index > zbuffer.size() - 1) continue;
+
+            float z = alpha * az + beta * bz + gamma * cz;
             if (zbuffer.at(index) >= z) continue;
+
             zbuffer[index] = z;
             framebuffer.set(x, y, color);
         }
@@ -133,7 +132,7 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
     std::string file_line;
     std::vector<vec3> all_vertices{};
 
-    const vec3 eye{-1, 0, 2};
+    const vec3 eye{0.35, 0, 0.6};
     const vec3 center{0, 0, 0};
     const vec3 up{0, 1, 0};
     const double focus{(eye - center).magnitude()};
@@ -144,12 +143,16 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
     mat4 Projection{central_projection(focus)};
     mat4 Viewport{viewport(width, height)};
 
+    int lines = 0;
+
     while (std::getline(obj_file, file_line)) {
         if (file_line.empty()) continue;
         std::istringstream iss(file_line);
 
         std::string identifier;
         iss >> identifier;
+
+        ++lines;
 
         if (identifier == "v") {
             float x_normalized, y_normalized, z_normalized;
@@ -161,6 +164,7 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
 
             vec4 transformed_vertex{Projection * ModelView * vec4(new_vertex.x, new_vertex.y, new_vertex.z, 1)};
             vec4 ndc{transformed_vertex.x / transformed_vertex.w, transformed_vertex.y / transformed_vertex.w, transformed_vertex.z / transformed_vertex.w, 1};
+
             vec4 screen{Viewport * ndc};
             new_vertex = vec3(screen.x, screen.y, screen.z);
 
@@ -182,13 +186,12 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
             vec3 second_vertex = all_vertices.at(vertex_indices[1] - 1);
             vec3 third_vertex = all_vertices.at(vertex_indices[2] - 1);
 
-            // line(first_vertex.x, first_vertex.y, second_vertex.x, second_vertex.y, framebuffer, red);
-            // line(first_vertex.x, first_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
-            // line(second_vertex.x, second_vertex.y, third_vertex.x, third_vertex.y, framebuffer, red);
             TGAColor random_color;
             for (int i = 0; i < 3; ++i) {
                 random_color.bgra[i] = std::rand() % 255;
             }
+
+            std::cout << lines << std::endl;
 
             triangle(first_vertex.x, first_vertex.y, first_vertex.z, second_vertex.x, second_vertex.y, second_vertex.z, third_vertex.x, third_vertex.y, third_vertex.z, zbuffer, framebuffer, random_color);
         }
@@ -202,31 +205,7 @@ int main(int argc, char** argv) {
     TGAImage framebuffer(width, height, TGAImage::RGB);
     std::vector<float> zbuffer(width * height, -1000);
 
-    // triangle(7, 45, 35, 100, 45,  60, 255, 255, 255, framebuffer, red);
-    // triangle(120, 35, 90, 5, 45, 110, 255, 255, 255, framebuffer, white);
-    // triangle(115, 83, 80, 90, 85, 120, 255, 255, 255, framebuffer, green); 
-    // line(115, 83, 80,  90, framebuffer, green); 
-
     render_object("..\\obj\\african_head\\african_head.obj", zbuffer, framebuffer);
-    // render_object("..\\obj\\diablo3_pose\\diablo3_pose.obj", zbuffer, framebuffer);
-    // render_object("..\\obj\\antidote\\ArmorHelm.obj", zbuffer, framebuffer);
-
-    // std::srand(std::time({}));
-    // auto start = std::chrono::steady_clock::now();
-    // for (int i=0; i<(1<<24); i++) {
-    //     int ax = std::rand()%width, ay = std::rand()%height;
-    //     int bx = std::rand()%width, by = std::rand()%height;
-    //     line(ax, ay, bx, by, framebuffer, { std::rand()%255, std::rand()%255, std::rand()%255, std::rand()%255 });
-    // }
-    // auto end = std::chrono::steady_clock::now();
-    // auto elapsedMicroseconds  = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    // auto elapsedMilliseconds  = elapsedMicroseconds / 1000.0;
-    // auto elapsedSeconds  = elapsedMilliseconds / 1000.0;
-
-    // std::cout << "Elapsed time:" << std::endl;
-    // std::cout << "Microseconds: " << elapsedMicroseconds << std::endl;
-    // std::cout << "Milliseconds: " << elapsedMilliseconds << std::endl;
-    // std::cout << "Seconds: " << elapsedSeconds << std::endl;
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
