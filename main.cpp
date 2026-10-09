@@ -143,16 +143,12 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
     mat4 Projection{central_projection(focus)};
     mat4 Viewport{viewport(width, height)};
 
-    int lines = 0;
-
     while (std::getline(obj_file, file_line)) {
         if (file_line.empty()) continue;
         std::istringstream iss(file_line);
 
         std::string identifier;
         iss >> identifier;
-
-        ++lines;
 
         if (identifier == "v") {
             float x_normalized, y_normalized, z_normalized;
@@ -190,8 +186,6 @@ static void render_object(std::string file_name, std::vector<float> &zbuffer, TG
             for (int i = 0; i < 3; ++i) {
                 random_color.bgra[i] = std::rand() % 255;
             }
-
-            std::cout << lines << std::endl;
 
             triangle(first_vertex.x, first_vertex.y, first_vertex.z, second_vertex.x, second_vertex.y, second_vertex.z, third_vertex.x, third_vertex.y, third_vertex.z, zbuffer, framebuffer, random_color);
         }
