@@ -49,7 +49,7 @@ double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) {
     return ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) * 0.5;
 }
 
-static void triangle(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TGAImage &framebuffer, TGAColor color) {
+static void rasterize(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TGAImage &framebuffer, TGAColor color) {
     vec4 a{screenCoordinates[0]};
     vec4 b{screenCoordinates[1]};
     vec4 c{screenCoordinates[2]};
@@ -60,9 +60,10 @@ static void triangle(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TGA
     int bounding_box_max_y = std::max(std::max(a.y, b.y), c.y);
     double total_area = signed_triangle_area(a.x, a.y, b.x, b.y, c.x, c.y);
 
-    #pragma omp parallel for
-    for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
-        for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y) {
+    if (std::abs(total_area) <= 1e-9) return;
+
+    for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y) {
+        for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
             /*
              Cross product is not commutative, so the ordering must follow A -> B -> C, 
              which was defined by the ordering of the total_area calculation
@@ -72,12 +73,12 @@ static void triangle(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TGA
             double gamma = signed_triangle_area(x, y, a.x, a.y, b.x, b.y) / total_area;
 
             if (alpha < 0 || beta < 0 || gamma < 0) continue;
-            int index{x + y * framebuffer.width()};
+            int index = x + y * framebuffer.width();
 
             if (index < 0 || index > zbuffer.size() - 1) continue;
 
             float z = alpha * a.z + beta * b.z + gamma * c.z;
-            if (zbuffer.at(index) >= z) continue;
+            if (zbuffer[index] >= z) continue;
 
             zbuffer[index] = z;
             framebuffer.set(x, y, color);
@@ -129,7 +130,7 @@ static mat4 viewport(int width, int height)
 
 static void render_object(Object& object, std::vector<float> &zbuffer, TGAImage &framebuffer)
 {
-    const vec3 eye{0, 0, 0.6};
+    const vec3 eye{1, 0, 0.6};
     const vec3 center{0, 0, 0};
     const vec3 up{0, 1, 0};
 
@@ -143,7 +144,6 @@ static void render_object(Object& object, std::vector<float> &zbuffer, TGAImage 
 
     for (int face = 0; face < object.GetNumberOfFaces(); ++face)
     {
-
         vec4 ndc[3];
         for (int vertexIndex = 0; vertexIndex < 3; ++vertexIndex)
         {
@@ -159,7 +159,7 @@ static void render_object(Object& object, std::vector<float> &zbuffer, TGAImage 
             random_color.bgra[i] = std::rand() % 255;
         }
 
-        triangle(screenCoordinates, zbuffer, framebuffer, random_color);
+        rasterize(screenCoordinates, zbuffer, framebuffer, random_color);
     }
 }
 
@@ -171,7 +171,14 @@ int main(int argc, char** argv) {
     std::vector<float> zbuffer(width * height, -1000);
 
     Object object{"..\\obj\\african_head\\african_head.obj"};
+
+    const auto start = std::chrono::steady_clock::now();
     render_object(object, zbuffer, framebuffer);
+    const auto end = std::chrono::steady_clock::now();
+
+    const std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Time: " << diff << " Triangle Count: " << object.GetNumberOfFaces();
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
