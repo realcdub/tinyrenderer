@@ -144,6 +144,11 @@ static void render_object(Object& object, std::vector<float> &zbuffer, TGAImage 
     mat4 Projection{central_projection(focus)};
     mat4 Viewport{viewport(width, height)};
 
+    /*
+    * NOTE: This is not thread-safe because the zbuffer is shared across threads. Therefore, the incorrect
+    * pixels can be displayed."
+    */
+
     #pragma omp parallel for
     for (int face = 0; face < object.GetNumberOfFaces(); ++face)
     {
