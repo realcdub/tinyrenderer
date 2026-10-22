@@ -62,10 +62,12 @@ static void rasterize(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TG
 
     if (std::abs(total_area) <= 1e-9) return;
 
-    for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y) {
-        for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x) {
+    for (int y = bounding_box_min_y; y <= bounding_box_max_y; ++y)
+    {
+        for (int x = bounding_box_min_x; x <= bounding_box_max_x; ++x)
+        {
             /*
-             Cross product is not commutative, so the ordering must follow A -> B -> C, 
+             Cross product is not commutative, so the ordering must follow A -> B -> C,
              which was defined by the ordering of the total_area calculation
             */
             double alpha = signed_triangle_area(x, y, b.x, b.y, c.x, c.y) / total_area;
@@ -74,14 +76,14 @@ static void rasterize(vec4 screenCoordinates[3], std::vector<float> &zbuffer, TG
 
             if (alpha < 0 || beta < 0 || gamma < 0) continue;
             int index = x + y * framebuffer.width();
-
             if (index < 0 || index > zbuffer.size() - 1) continue;
-
             float z = alpha * a.z + beta * b.z + gamma * c.z;
-            if (zbuffer[index] >= z) continue;
 
-            zbuffer[index] = z;
-            framebuffer.set(x, y, color);
+            if (zbuffer[index] < z)
+            {
+                zbuffer[index] = z;
+                framebuffer.set(x, y, color);
+            }
         }
     }
 }
@@ -142,6 +144,7 @@ static void render_object(Object& object, std::vector<float> &zbuffer, TGAImage 
     mat4 Projection{central_projection(focus)};
     mat4 Viewport{viewport(width, height)};
 
+    #pragma omp parallel for
     for (int face = 0; face < object.GetNumberOfFaces(); ++face)
     {
         vec4 ndc[3];
@@ -171,6 +174,8 @@ int main(int argc, char** argv) {
     std::vector<float> zbuffer(width * height, -1000);
 
     Object object{"..\\obj\\african_head\\african_head.obj"};
+
+    std::srand(std::time(nullptr));
 
     const auto start = std::chrono::steady_clock::now();
     render_object(object, zbuffer, framebuffer);
